@@ -1,0 +1,47 @@
+// === NIPPLE + PUBIC FIXER (Add this function) ===
+function buildPrompt(userPrompt) {
+  const base = `(masterpiece, best quality, ultra-detailed, photorealistic:1.3), ${userPrompt}, full frontal nudity`;
+
+  const nippleFix = `perfect realistic nipples, highly detailed areola, erect nipples, natural breast shape, no blur, no censorship, no pasties`;
+  const pubicFix = `detailed pubic region, smooth shaved vulva, realistic labia and clitoris definition, no artifacts, no covering objects`;
+  
+  const enhancers = `sharp focus on chest and groin, cinematic lighting, detailed skin texture, natural shadows`;
+
+  const fullPrompt = `${base}, ${nippleFix}, ${pubicFix}, ${enhancers}`.trim();
+
+  const negativePrompt = `
+    blurry nipples, deformed breasts, missing nipples, censored chest, pasties, clothing on chest,
+    flat chest, barbie doll nipples, smooth skin on areola, low detail chest, pixelated nipples,
+    fused nipples, extra objects on breasts, heart-shaped nipples, weird textures on nipples, no areola,
+    deformed pubic area, blob covering genitals, censored pubic, fused objects in crotch,
+    weird textures on vulva, barbie anatomy down there, no labia, smooth doll crotch
+  `.trim().replace(/\s+/g, ' ');
+
+  return { fullPrompt, negativePrompt };
+}
+
+// === USE IN YOUR GENERATE ROUTE ===
+app.post('/generate', (req, res) => {
+  const userPrompt = req.body.prompt || "nude woman on pink couch";
+  const { fullPrompt, negativePrompt } = buildPrompt(userPrompt);
+
+  // === YOUR AI CALL (Eternal AI / fal.ai / Replicate) ===
+  const payload = {
+    prompt: fullPrompt,
+    negative_prompt: negativePrompt,
+    steps: 50,
+    guidance_scale: 8.5,
+    width: 1024,
+    height: 1024
+  };
+
+  // Example with fetch (replace with your actual API)
+  fetch('YOUR_AI_ENDPOINT', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(r => r.json())
+  .then(data => res.json({ image_url: data.image }))
+  .catch(err => res.status(500).json({ error: err.message }));
+});

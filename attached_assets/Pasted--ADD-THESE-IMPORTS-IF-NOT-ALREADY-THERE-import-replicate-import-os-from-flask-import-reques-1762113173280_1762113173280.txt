@@ -1,0 +1,60 @@
+# === ADD THESE IMPORTS IF NOT ALREADY THERE ===
+import replicate
+import os
+from flask import request, jsonify
+
+# === GLOBAL ENHANCED PROMPT SYSTEM ===
+def enhance_prompt(user_prompt: str) -> str:
+    """Auto-adds hyper-realism, anatomy, and quality boosters"""
+    enhancers = [
+        "(masterpiece, best quality, ultra-detailed, photorealistic:1.3)",
+        "(8k, RAW photo, hyper-realistic, intricate details:1.2)",
+        "perfect body proportions, anatomically correct",
+        "sharp focus, cinematic lighting, soft shadows",
+        "detailed skin texture, pores, micro-details"
+    ]
+    return f"{user_prompt}, {', '.join(enhancers)}".strip()
+
+def get_negative_prompt() -> str:
+    """Universal negative prompt — stops deformities, bad hands, etc."""
+    return """
+    (deformed, distorted, disfigured:1.4), poorly drawn, bad anatomy, 
+    wrong anatomy, extra limb, missing limb, floating limbs, 
+    (disconnected limbs:1.3), mutated hands, mutated fingers, 
+    (malformed hands:1.4), long neck, long body, 
+    extra fingers, fewer fingers, (fused fingers:1.3), 
+    low quality, lowres, blurry, out of focus, 
+    watermark, text, logo, censored, barbie doll, plastic skin
+    """.strip()
+
+# === YOUR NEW NSFW FLUX ROUTE (WITH BUILT-IN FIXES) ===
+@app.route('/nsfw-flux', methods=['POST'])
+def nsfw_flux():
+    raw_prompt = request.json.get("prompt", "nude woman dancing on beach").strip()
+
+    # 1. ENHANCE PROMPT
+    enhanced_prompt = enhance_prompt(raw_prompt)
+
+    # 2. ADD NUDITY + NIPPLE FIX IF "NUDE" DETECTED
+    if any(word in raw_prompt.lower() for word in ["nude", "naked", "topless", "bare"]):
+        enhanced_prompt += ", full frontal nudity, (prominent erect nipples:1.4), (textured areolas:1.3), no pasties, no censorship"
+
+    # 3. FINAL PROMPT
+    final_prompt = enhanced_prompt
+
+    try:
+        output = replicate.run(
+            "aisha-ai-official/flux.1dev-uncensored-msfluxnsfw-v3",
+            input={
+                "prompt": final_prompt,
+                "negative_prompt": get_negative_prompt(),
+                "width": 1024,
+                "height": 1024,
+                "num_inference_steps": 50,
+                "guidance_scale": 8.5,
+                "seed": 123456789  # remove for random
+            }
+        )
+        return jsonify({"image_url": output[0]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

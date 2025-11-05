@@ -1,0 +1,47 @@
+// === ULTRA-REAL ANATOMY GENERATOR (PONY XL) ===
+const Replicate = require('@replicate/node-sdk');
+const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
+
+app.post('/generate', async (req, res) => {
+  const { imageUrl, prompt = "blonde woman on wooden swing" } = req.body;
+  if (!imageUrl) return res.status(400).json({ error: 'Upload image first' });
+
+  // === DEDUCT CREDIT (YOUR SYSTEM) ===
+  // deductCredit(req.session.userId, 1);
+
+  try {
+    const fullPrompt = `
+      photorealistic portrait of ${prompt}, 
+      (masterpiece, ultra-detailed, hyper-realistic:1.3), 8k resolution, sharp focus, cinematic lighting with natural shadows under breasts and between legs, 
+      detailed skin texture with pores, freckles, and subtle stretch marks on hips and thighs, light sweat on collarbone, 
+      natural sagging breasts with realistic weight and slight asymmetry, erect nipples with textured pink-brown areolas, detailed veins and goosebumps, 
+      light natural pubic hair trimmed short, realistic labia majora and minora with natural folds and color variation, clitoris visible, no perfect symmetry, 
+      micro-details like skin imperfections, stray hair strands, and fabric creases
+    `;
+
+    const negativePrompt = `
+      plastic skin, shiny doll skin, barbie anatomy, perfect symmetrical breasts, fake erect nipples, smooth airbrushed crotch, 
+      no pubic hair or overly smooth vulva, deformed labia, fused folds, extra limbs or fingers on groin, 
+      low detail skin, blurry anatomy, overexposed highlights, cartoonish proportions, mutated hands or feet, 
+      jpeg artifacts, watermark, text, ugly, disfigured, morbid, extra limbs, poorly drawn face, bad hands, 
+      score_6, score_5, score_4
+    `;
+
+    const output = await replicate.run("fofr/pony:3c4a8a1d0e0a4a4b9c4d5e6f7g8h9i0j", {
+      input: {
+        image: imageUrl,
+        prompt: fullPrompt,
+        negative_prompt: negativePrompt,
+        strength: 0.7,
+        num_inference_steps: 50,
+        guidance_scale: 7.5,
+        width: 1024,
+        height: 1536
+      }
+    });
+
+    res.json({ image_url: output[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});

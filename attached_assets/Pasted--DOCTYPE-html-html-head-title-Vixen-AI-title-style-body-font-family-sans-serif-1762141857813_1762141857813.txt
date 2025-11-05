@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Vixen AI</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; background: #111; color: #fff; }
+    .tier { display: inline-block; margin: 10px; padding: 20px; background: #222; border-radius: 12px; width: 180px; }
+    button { background: #e91e63; color: white; padding: 10px; width: 100%; border: none; border-radius: 8px; }
+    .pro button { background: gold; color: black; }
+    .elite button { background: lime; color: black; }
+    .unlimited button { background: cyan; color: black; }
+  </style>
+</head>
+<body>
+  <h1>VIXEN AI</h1>
+  <p>Credits: <strong id="credits">0</strong> | Tier: <span id="tier">Free</span></p>
+
+  <button onclick="generate()">Generate Image</button>
+  <div id="result"></div>
+
+  <div class="tier">
+    <h3>BASIC</h3>
+    <p>$14.99/mo</p>
+    <p>100 credits</p>
+    <button onclick="sub('basic')">BUY</button>
+  </div>
+  <div class="tier pro">
+    <h3>PRO</h3>
+    <p>$49.99/mo</p>
+    <p>500 credits</p>
+    <button onclick="sub('pro')">BEST</button>
+  </div>
+  <div class="tier elite">
+    <h3>ELITE</h3>
+    <p>$149.99/mo</p>
+    <p>1,500 credits</p>
+    <button onclick="sub('elite')">BUY</button>
+  </div>
+  <div class="tier unlimited">
+    <h3>UNLIMITED</h3>
+    <p>$199.99/mo</p>
+    <p>No limits</p>
+    <button onclick="sub('unlimited')">ACTIVATE</button>
+  </div>
+
+  <script>
+    async function sub(tier) {
+      const res = await fetch('/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier })
+      });
+      const data = await res.json();
+      if (data.url) location = data.url;
+    }
+
+    async function generate() {
+      const res = await fetch('/generate', { method: 'POST' });
+      const data = await res.json();
+      document.getElementById('result').innerHTML = data.image_url ? `<img src="${data.image_url}">` : `<p>${data.error}</p>`;
+      updateUser();
+    }
+
+    async function updateUser() {
+      const res = await fetch('/user');
+      const user = await res.json();
+      document.getElementById('credits').innerText = user.credits;
+      document.getElementById('tier').innerText = user.tier;
+    }
+    updateUser();
+    setInterval(updateUser, 5000);
+  </script>
+</body>
+</html>

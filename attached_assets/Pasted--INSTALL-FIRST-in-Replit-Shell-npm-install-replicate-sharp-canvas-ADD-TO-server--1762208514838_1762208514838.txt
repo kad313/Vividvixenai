@@ -1,0 +1,71 @@
+// === INSTALL FIRST (in Replit Shell) ===
+npm install replicate sharp canvas
+
+// === ADD TO server.js ===
+const Replicate = require('replicate');
+const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
+const sharp = require('sharp');
+const { createCanvas, loadImage } = require('canvas');
+
+// === PONY XL MODEL (BETTER ANATOMY) ===
+const PONY_MODEL = "fofr/pony:abc123"; // Replace with real model ID if needed
+
+// === INPAINT MASK FUNCTION ===
+async function createCrotchMask(imageUrl) {
+  const image = await loadImage(imageUrl);
+  const canvas = createCanvas(image.width, image.height);
+  const ctx = canvas.getContext('2d');
+  
+  ctx.drawImage(image, 0, 0);
+  ctx.fillStyle = 'black';
+  ctx.fillRect(0, image.height * 0.6, image.width, image.height * 0.4); // Mask lower 40%
+  
+  return canvas.toBuffer('image/png');
+}
+
+// === GENERATE WITH PONY + INPAINT FALLBACK ===
+app.post('/generate', async (req, res) => {
+  const userPrompt = req.body.prompt || "blonde woman on swing";
+
+  // Step 1: Try Pony XL
+  try {
+    const output = await replicate.run(PONY_MODEL, {
+      input: {
+        prompt: `nude ${userPrompt}, photorealistic, natural breasts, detailed nipples, natural vulva, light pubic hair`,
+        negative_prompt: "plastic, barbie, deformed, censored, blob",
+        width: 1024,
+        height: 1536,
+        num_inference_steps: 50,
+        guidance_scale: 7.5
+      }
+    });
+
+    const imageUrl = output[0];
+
+    // Step 2: Check if needs inpaint (simple: if user says "bad")
+    if (req.body.inpaint) {
+      const mask = await createCrotchMask(imageUrl);
+      const inpaint = await replicate.run("stability-ai/stable-diffusion-inpainting", {
+        input: {
+          image: imageUrl,
+          mask_image: mask,
+          prompt: "detailed realistic vulva, natural labia, light pubic hair, no artifacts",
+          strength: 0.8
+        }
+      });
+      return res.json({ image_url: inpaint[0] });
+    }
+
+    res.json({ image_url: imageUrl, needs_inpaint: false });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// === USER FEEDBACK ROUTE ===
+app.post('/feedback', (req, res) => {
+  const { issue } = req.body; // e.g., "pubic bad"
+  // Save to DB or send to Telegram
+  console.log("Feedback:", issue);
+  res.json({ success: true });
+});

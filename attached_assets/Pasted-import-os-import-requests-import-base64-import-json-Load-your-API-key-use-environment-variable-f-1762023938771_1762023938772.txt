@@ -1,0 +1,84 @@
+import os
+import requests
+import base64
+import json
+
+# Load your API key (use environment variable for security)
+API_KEY = os.getenv("ETERNALAI_API_KEY", "your_api_key_here")
+BASE_URL = "https://agentic.eternalai.org/uncensored-image"
+
+# Request headers
+headers = {
+    "accept": "application/json",
+    "x-api-key": API_KEY,
+    "Content-Type": "application/json"
+}
+
+# Convert local image to Base64 for uploading
+def image_to_base64(image_path):
+    try:
+        with open(image_path, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
+            ext = os.path.splitext(image_path)[1].lower()
+            mime_type = (
+                "image/jpeg"
+                if ext in [".jpg", ".jpeg"]
+                else "image/png"
+                if ext == ".png"
+                else "image/unknown"
+            )
+            return f"data:{mime_type};base64,{encoded_string}"
+    except FileNotFoundError:
+        raise Exception(f"Image file not found: {image_path}")
+    except Exception as e:
+        raise Exception(f"Error converting image to base64: {e}")
+
+# Input
+image_path = "/path/to/your_image.jpg"  # Replace with your image path
+prompt = "Change her cloth to black bikini, keep her shape"
+
+try:
+    # Convert image to base64 format
+    image_base64 = image_to_base64(image_path)
+    filename = os.path.basename(image_path)
+    payload = {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": image_base64,
+                            "filename": filename
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": prompt
+                    }
+                ]
+            }
+        ],
+        "type": "edit"
+    }
+
+    # Send POST request
+    response = requests.post(BASE_URL, headers=headers, json=payload)
+    response.raise_for_status()
+
+    # Parse response JSON
+    result = response.json()
+    print(json.dumps(result, indent=2))
+
+    request_id = result.get("request_id")
+    print(f"✅ Request ID: {request_id}")
+
+except requests.exceptions.RequestException as e:
+    print(f"❌ Error sending request: {e}")
+    if e.response is not None:
+        print("Response content:", e.response.text)
+    request_id = None
+except Exception as e:
+    print(f"Unexpected error: {e}")
+    request_id = None

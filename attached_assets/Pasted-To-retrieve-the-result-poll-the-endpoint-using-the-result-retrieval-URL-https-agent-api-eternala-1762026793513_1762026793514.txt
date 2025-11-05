@@ -1,0 +1,83 @@
+To retrieve the result, poll the endpoint using the result retrieval URL: https://agent-api.eternalai.org/result
+
+Bash
+Python
+
+Copy
+import time
+import requests
+import json
+import re
+import os
+
+# Set your API key (preferably from environment variable for security)
+API_KEY = os.getenv("ETERNALAI_API_KEY", "your_api_key_here")
+
+# API endpoints
+RESULT_URL = "https://agent-api.eternalai.org/result"
+
+# Headers for API requests
+headers = {
+    "accept": "application/json",
+    "x-api-key": API_KEY,
+    "Content-Type": "application/json"
+}
+
+# Replace with your request_id
+request_id = "fc662a96-e1d1-403a-a92a-b3dd3937ac95"
+
+if request_id:
+    try:
+        polling_url = f"{RESULT_URL}?agent=uncensored-image-to-video&request_id={request_id}"
+        last_progress = -1  # Track last_progress 
+
+        while True:
+            time.sleep(1)  # Wait 1 second between polls
+            result_response = requests.get(polling_url, headers=headers)
+            result_response.raise_for_status()
+            result = result_response.json()
+
+            # Handle status (can be a string or object)
+            status = result.get("status")
+            if isinstance(status, dict):
+                status = status.get("status", "unknown")
+
+            # Extract progress from log, if available
+            progress = last_progress  # Default to last_progress
+            log = result.get("log")
+            if log:
+                try:
+                    # Parse log as JSON if it's a string
+                    log_data = json.loads(log) if isinstance(log, str) else log
+                    progress = float(log_data.get("progress", 0))
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    # Fallback: Try to extract progress using regex if log is a string
+                    if isinstance(log, str):
+                        match = re.search(r'"progress":\s*([0-9.]+)', log)
+                        if match:
+                            progress = float(match.group(1))
+
+            # Print status and progress 
+            if progress != last_progress or status != "pending":
+                if status == "success":
+                    progress = 100
+                print(f"Status: {status} | Progress: {progress:.1f}%")
+                last_progress = progress
+
+            # Check if the task is complete
+            if status == "success":
+                result_url = result.get("result_url") or result.get("result_video_url", "")
+                if not result_url:
+                    print("Error: No result URL found in the response.")
+                else:
+                    print(f"Result URL: {result_url}")
+                break
+            elif status == "failed":
+                print(f"Failed: {result}")
+                break
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error polling for result: {e}")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+A successful response will be a JSON object containing the result, where result['result_url'] or result['result_video_url'] is a signed URL for video retrieval.

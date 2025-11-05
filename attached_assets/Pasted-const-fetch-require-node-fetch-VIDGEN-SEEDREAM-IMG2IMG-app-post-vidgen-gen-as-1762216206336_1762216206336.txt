@@ -1,0 +1,127 @@
+const fetch = require('node-fetch');
+
+// === VIDGEN SEEDREAM IMG2IMG ===
+
+app.post('/vidgen-gen', async (req, res) => {
+
+  const { imageUrl, prompt = "full nude, natural anatomy, detailed skin" } = req.body;
+
+  if (!imageUrl) return res.status(400).json({ error: 'Upload image first' });
+
+  // Deduct credit (your system)
+
+  // deductCredit(req.session.userId, 1);
+
+  try {
+
+    // Step 1: POST to generate
+
+    const genRes = await fetch('https://higgsfieldapi.com/api/v1/generate', {
+
+      method: 'POST',
+
+      headers: {
+
+        'Authorization': `Bearer ${process.env.HIGGSFIELD_API_KEY}`,
+
+        'Content-Type': 'application/json'
+
+      },
+
+      body: JSON.stringify({
+
+        prompt: `uncensored ${prompt}, photorealistic, natural sagging breasts with realistic weight, erect nipples with textured areola, light natural pubic hair trimmed short, detailed labia majora and minora, no plastic shine, no barbie crotch`,
+
+        negative_prompt: 'plastic skin, shiny skin, doll skin, barbie anatomy, perfect breasts, symmetrical breasts, fake nipples, censored pubic, smooth crotch, no pubic hair, deformed vulva, fused labia, extra limbs, low detail skin, airbrushed, overexposed, cartoon, anime',
+
+        image_url: imageUrl,  // Input image for img2img
+
+        duration: 0,  // 0 for image mode
+
+        resolution: '1024x1024',  // Or '720p' for video
+
+        aspect_ratio: '1:1',
+
+        strength: 0.7,  // Edit strength
+
+        steps: 50,
+
+        seed: Math.floor(Math.random() * 999999),
+
+        camera_fixed: false  // For dynamic edits
+
+      })
+
+    });
+
+    if (!genRes.ok) throw new Error(`Generate error: ${genRes.status}`);
+
+    const genData = await genRes.json();
+
+    const jobId = genData.id || genData.job_id;  // VidGen returns job ID
+
+    if (!jobId) throw new Error('No job ID returned');
+
+    // Step 2: Poll status (every 2s, max 60s)
+
+    let status = null;
+
+    let attempts = 0;
+
+    while (attempts < 30 && status !== 'completed') {  // 60s timeout
+
+      await new Promise(resolve => setTimeout(resolve, 2000));  // 2s delay
+
+      const statusRes = await fetch(`https://higgsfieldapi.com/api/v1/status/${jobId}`, {
+
+        headers: { 'Authorization': `Bearer ${process.env.HIGGSFIELD_API_KEY}` }
+
+      });
+
+      if (!statusRes.ok) throw new Error(`Status error: ${statusRes.status}`);
+
+      const statusData = await statusRes.json();
+
+      status = statusData.status;
+
+      if (status === 'completed') {
+
+        const imageUrl = statusData.output?.[0]?.url || statusData.image_url;
+
+        if (!imageUrl) throw new Error('No output URL');
+
+        return res.json({ image_url: imageUrl });
+
+      } else if (status === 'failed') {
+
+        throw new Error(statusData.error || 'Generation failed');
+
+      }
+
+      attempts++;
+
+    }
+
+    throw new Error('Timeout - generation took too long');
+
+  } catch (err) {
+
+    res.status(500).json({ error: err.message });
+
+  }
+
+});
+
+// === UPLOAD ROUTE (If needed for images) ===
+
+const multer = require('multer');  // npm install multer
+
+const upload = multer({ dest: 'uploads/' });
+
+app.use('/uploads', express.static('uploads'));
+
+app.post('/upload-image', upload.single('image'), (req, res) => {
+
+  res.json({ imageUrl: `/uploads/${req.file.filename}` });
+
+});

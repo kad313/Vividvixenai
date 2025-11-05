@@ -1,0 +1,111 @@
+import os
+import requests
+import json
+
+# Set your API key (preferably from environment variable for security)
+API_KEY = os.getenv("ETERNALAI_API_KEY", "your_api_key_here")
+
+# API endpoints
+BASE_URL = "https://agentic.eternalai.org/prompt"
+
+# Headers for API requests
+headers = {
+    "accept": "text/event-stream",  # Required for SSE streaming
+    "x-api-key": API_KEY,
+    "Content-Type": "application/json"
+}
+
+
+# Function to handle the streaming result
+def handle_result(response):
+    content = ""
+    request_id = "unknown"  # Default if request_id is not found
+    print("Streaming response started...")
+    try:
+        for line in response.iter_lines():
+            if line:
+                line = line.decode("utf-8")
+                if line.startswith("data:"):
+                    try:
+                        # Parse the SSE data field
+                        data = json.loads(line[5:].strip())  # Remove "data:" prefix
+                        
+                        # Get request_id from first chunk if available
+                        if request_id == "unknown" and "id" in data:
+                            request_id = data.get("id", "unknown")
+                            print(f"Request ID: {request_id}")
+                        
+                        # Extract content from choices
+                        choices = data.get("choices", [])
+                        for choice in choices:
+                            delta = choice.get("delta", {})
+                            chunk_content = delta.get("content", "")
+                            # Remove newlines to ensure continuous output
+                            # chunk_content = chunk_content.replace("\n", "").replace("\r", "")
+                            if chunk_content:
+                                content += chunk_content
+                                print(chunk_content, end="", flush=True)  # Print chunk without newline
+                            
+                            # Check finish_reason to end streaming
+                            finish_reason = choice.get("finish_reason")
+                            if finish_reason:
+                                print(f"\nStream finished with reason: {finish_reason}")
+                                return content  
+                    except json.JSONDecodeError:
+                        continue  # # Skip invalid JSON chunks
+                elif line == "data: [DONE]":  # SSE end signal
+                    break
+        if not content:
+            print("Error: No content received in the response.")
+        return content
+    except Exception as e:
+        print(f"\nError processing streaming response: {e}")
+        return ""
+
+# Replace with your prompt
+prompt = "You are a creative storyteller. Write a short, fun, and engaging story of around 500 words. The story should be easy to read, have a lighthearted or humorous tone, and include interesting characters and a small twist or surprise at the end."
+
+# Main script
+try:
+    # Step 1: Create a request for text generation
+    payload = {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": prompt
+                    }
+                ]
+            }
+        ],
+        "agent": "uncensored-chat",
+        "stream": True
+    }
+
+    # Send POST request to create the text generation task
+    response = requests.post(BASE_URL, headers=headers, json=payload, stream=True)
+    response.raise_for_status()  # Raise an exception for bad status codes
+
+    # Step 2: Handle the streaming response
+    content = handle_result(response)
+    
+
+except requests.exceptions.RequestException as e:
+    print(f"Error: {e}")
+except Exception as e:
+    print(f"Unexpected error: {e}")
+Streaming Response Format
+The API returns Server-Sent Events (SSE) with the following structure:
+
+
+Copy
+data: {"id":"chatcmpl-xxx","choices":[{"delta":{"content":"","role":"assistant"},"finish_reason":null,"index":0}],"created":1758777031,"model":"NousResearch/Hermes-4-70B-FP8","object":"chat.completion.chunk"}
+data: {"id":"chatcmpl-xxx","choices":[{"delta":{"content":"I'll generate a beautiful red cat image for you...","role":null},"finish_reason":null,"index":0}],"created":1758777031,"model":"NousResearch/Hermes-4-70B-FP8","object":"chat.completion.chunk"}
+Response Content Types
+Thinking Content: <think>...</think> - AI reasoning process (optional display)
+
+Text Content: Regular text responses explaining the generation process
+
+Action Content: <action>...</action> - Process logs (optional display)
